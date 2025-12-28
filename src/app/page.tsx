@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 // Circle layout configuration
-const CIRCLE_RADIUS = 12;
-const NUM_RINGS = 5;
+const CIRCLE_RADIUS = 28;
+const NUM_RINGS = 2;
 
 // Generate circle positions
 function generateCircles() {
@@ -35,7 +35,7 @@ function generateCircles() {
 }
 
 const ALL_CIRCLES = generateCircles();
-// Total: 1 + 6 + 12 + 18 + 24 + 30 + 36 + 42 = 169 circles
+// Total: 1 + 6 + 12 = 19 circles
 
 // Helper to get circle count for a ring
 function getCountForRing(ring: number): number {
@@ -230,7 +230,7 @@ export default function Home() {
     };
   }, [addKey, removeKey]);
 
-  const containerSize = 500;
+  const containerSize = 700;
   const centerOffset = containerSize / 2;
   const outerRadius = CIRCLE_RADIUS * 2.3 * NUM_RINGS + CIRCLE_RADIUS + 6;
 
@@ -249,7 +249,7 @@ export default function Home() {
           r={outerRadius}
           fill="none"
           stroke="var(--circle-stroke)"
-          strokeWidth="1.5"
+          strokeWidth="2.5"
           className="outer-ring"
         />
 
@@ -262,7 +262,7 @@ export default function Home() {
             r={CIRCLE_RADIUS}
             fill={filledCircles.has(circle.id) ? "var(--circle-fill)" : "none"}
             stroke="var(--circle-stroke)"
-            strokeWidth="1"
+            strokeWidth="2"
             className={`inner-circle ${filledCircles.has(circle.id) ? "filled" : ""}`}
           />
         ))}
@@ -307,7 +307,7 @@ export default function Home() {
         }
 
         .instrument-svg {
-          filter: drop-shadow(0 0 40px var(--glow-color));
+          filter: drop-shadow(0 0 60px var(--glow-color));
         }
 
         .outer-ring {
@@ -319,15 +319,15 @@ export default function Home() {
         }
 
         .inner-circle.filled {
-          filter: drop-shadow(0 0 4px var(--circle-fill));
+          filter: drop-shadow(0 0 8px var(--circle-fill));
         }
 
         .hint-container {
           display: flex;
           flex-direction: column;
-          gap: 0.35rem;
+          gap: 0.5rem;
           font-family: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
-          font-size: 10px;
+          font-size: 14px;
           color: var(--hint-color);
         }
 
@@ -339,7 +339,7 @@ export default function Home() {
         .hint-label {
           color: var(--circle-stroke);
           opacity: 0.5;
-          min-width: 70px;
+          min-width: 100px;
           text-align: right;
         }
       `}</style>

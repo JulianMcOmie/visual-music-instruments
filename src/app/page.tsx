@@ -44,12 +44,10 @@ function getCountForRing(ring: number): number {
 
 // Symmetric pattern definitions - grouped logically on QWERTY keyboard
 const PATTERNS: Record<string, number[]> = {
-  // === NUMBER ROW: Ring selections ===
-  "1": ALL_CIRCLES.filter((c) => c.ring === 1).map((c) => c.id),
-  "2": ALL_CIRCLES.filter((c) => c.ring === 2).map((c) => c.id),
-  "3": ALL_CIRCLES.filter((c) => c.ring === 3).map((c) => c.id),
-  "4": ALL_CIRCLES.filter((c) => c.ring === 4).map((c) => c.id),
-  "5": ALL_CIRCLES.filter((c) => c.ring === 5).map((c) => c.id),
+  // === NUMBER ROW: Ring selections (1=center, 2=ring1, 3=ring2) ===
+  "1": ALL_CIRCLES.filter((c) => c.ring === 0).map((c) => c.id),
+  "2": ALL_CIRCLES.filter((c) => c.ring === 1).map((c) => c.id),
+  "3": ALL_CIRCLES.filter((c) => c.ring === 2).map((c) => c.id),
 
   // === TOP ROW: Cumulative and special selections ===
   q: [1], // Center only
@@ -271,7 +269,7 @@ export default function Home() {
       <div className="hint-container">
         <div className="hint-row">
           <span className="hint-label">Rings:</span>
-          <span>1-5 each ring · Q center · O outer</span>
+          <span>1 center · 2 inner · 3 outer</span>
         </div>
         <div className="hint-row">
           <span className="hint-label">Cumulative:</span>

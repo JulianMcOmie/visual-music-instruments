@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 
 // Circle layout configuration
-const CIRCLE_RADIUS = 10;
+const CIRCLE_RADIUS = 11;
 const NUM_RINGS = 8;
 
 // Generate circle positions
@@ -23,8 +23,8 @@ function generateCircles() {
       const angle = (i * (360 / count) - 90) * (Math.PI / 180);
       circles.push({
         id: id++,
-        cx: Math.cos(angle) * distance,
-        cy: Math.sin(angle) * distance,
+        cx: Math.round(Math.cos(angle) * distance * 1e10) / 1e10,
+        cy: Math.round(Math.sin(angle) * distance * 1e10) / 1e10,
         ring: ringNum,
         index: i,
       });
@@ -44,7 +44,7 @@ function getCountForRing(ring: number): number {
 
 // Symmetric pattern definitions - grouped logically on QWERTY keyboard
 const PATTERNS: Record<string, number[]> = {
-  // === NUMBER ROW: Ring selections (1=center, 2-8=rings) ===
+  // === NUMBER ROW: Ring selections (1=center, 2-9=rings) ===
   "1": ALL_CIRCLES.filter((c) => c.ring === 0).map((c) => c.id),
   "2": ALL_CIRCLES.filter((c) => c.ring === 1).map((c) => c.id),
   "3": ALL_CIRCLES.filter((c) => c.ring === 2).map((c) => c.id),
@@ -53,6 +53,7 @@ const PATTERNS: Record<string, number[]> = {
   "6": ALL_CIRCLES.filter((c) => c.ring === 5).map((c) => c.id),
   "7": ALL_CIRCLES.filter((c) => c.ring === 6).map((c) => c.id),
   "8": ALL_CIRCLES.filter((c) => c.ring === 7).map((c) => c.id),
+  "9": ALL_CIRCLES.filter((c) => c.ring === 8).map((c) => c.id),
 
   // === TOP ROW: Cumulative and special selections ===
   q: [1], // Center only
@@ -274,7 +275,7 @@ export default function Home() {
       <div className="hint-container">
         <div className="hint-row">
           <span className="hint-label">Rings:</span>
-          <span>1 center · 2-8 rings (inner to outer)</span>
+          <span>1 center · 2-9 rings (inner to outer)</span>
         </div>
         <div className="hint-row">
           <span className="hint-label">Cumulative:</span>

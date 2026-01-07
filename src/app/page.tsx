@@ -2,209 +2,165 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 
-// Circle layout configuration
-const CIRCLE_RADIUS = 11;
-const NUM_RINGS = 8;
+// Constants
+const RING_RADII = [0, 60, 120, 180, 240, 300];
+const CENTER_X = 350;
+const CENTER_Y = 350;
+const CONTAINER_SIZE = 700;
 
-// Generate circle positions
-function generateCircles() {
-  const circles: { id: number; cx: number; cy: number; ring: number; index: number }[] = [];
-  let id = 1;
-
-  // Center circle
-  circles.push({ id: id++, cx: 0, cy: 0, ring: 0, index: 0 });
-
-  // Generate rings with increasing circle counts
-  for (let ringNum = 1; ringNum <= NUM_RINGS; ringNum++) {
-    const count = ringNum * 6; // 6, 12, 18, 24, 30, 36, 42
-    const distance = CIRCLE_RADIUS * 2.3 * ringNum;
-
-    for (let i = 0; i < count; i++) {
-      const angle = (i * (360 / count) - 90) * (Math.PI / 180);
-      circles.push({
-        id: id++,
-        cx: Math.round(Math.cos(angle) * distance * 1e10) / 1e10,
-        cy: Math.round(Math.sin(angle) * distance * 1e10) / 1e10,
-        ring: ringNum,
-        index: i,
-      });
-    }
-  }
-
-  return circles;
+// Shape type definition
+interface Shape {
+  startRing: number;  // 0-5
+  endRing: number;    // 0-5
+  angleRatio: number; // 0.0-1.0 position within primary sector
 }
 
-const ALL_CIRCLES = generateCircles();
-// Total: 1 + 6 + 12 + 18 + 24 + 30 + 36 + 42 = 169 circles
+// Key to shape mapping - all lines with varying lengths and positions
+const KEY_TO_SHAPE: Record<string, Shape> = {
+  // TOP ROW - Long lines from center to outer rings
+  q: { startRing: 0, endRing: 5, angleRatio: 0.15 },
+  w: { startRing: 0, endRing: 5, angleRatio: 0.35 },
+  e: { startRing: 0, endRing: 5, angleRatio: 0.5 },
+  r: { startRing: 0, endRing: 5, angleRatio: 0.65 },
+  t: { startRing: 0, endRing: 5, angleRatio: 0.85 },
+  y: { startRing: 0, endRing: 4, angleRatio: 0.2 },
+  u: { startRing: 0, endRing: 4, angleRatio: 0.5 },
+  i: { startRing: 0, endRing: 4, angleRatio: 0.8 },
+  o: { startRing: 0, endRing: 3, angleRatio: 0.3 },
+  p: { startRing: 0, endRing: 3, angleRatio: 0.7 },
 
-// Helper to get circle count for a ring
-function getCountForRing(ring: number): number {
-  return ring === 0 ? 1 : ring * 6;
-}
+  // HOME ROW - Medium lines from mid-rings outward
+  a: { startRing: 2, endRing: 5, angleRatio: 0.2 },
+  s: { startRing: 2, endRing: 5, angleRatio: 0.5 },
+  d: { startRing: 2, endRing: 5, angleRatio: 0.8 },
+  f: { startRing: 3, endRing: 5, angleRatio: 0.25 },
+  g: { startRing: 3, endRing: 5, angleRatio: 0.5 },
+  h: { startRing: 3, endRing: 5, angleRatio: 0.75 },
+  j: { startRing: 1, endRing: 4, angleRatio: 0.3 },
+  k: { startRing: 1, endRing: 4, angleRatio: 0.5 },
+  l: { startRing: 1, endRing: 4, angleRatio: 0.7 },
 
-// Symmetric pattern definitions - grouped logically on QWERTY keyboard
-const PATTERNS: Record<string, number[]> = {
-  // === NUMBER ROW: Ring selections (1=center, 2-9=rings) ===
-  "1": ALL_CIRCLES.filter((c) => c.ring === 0).map((c) => c.id),
-  "2": ALL_CIRCLES.filter((c) => c.ring === 1).map((c) => c.id),
-  "3": ALL_CIRCLES.filter((c) => c.ring === 2).map((c) => c.id),
-  "4": ALL_CIRCLES.filter((c) => c.ring === 3).map((c) => c.id),
-  "5": ALL_CIRCLES.filter((c) => c.ring === 4).map((c) => c.id),
-  "6": ALL_CIRCLES.filter((c) => c.ring === 5).map((c) => c.id),
-  "7": ALL_CIRCLES.filter((c) => c.ring === 6).map((c) => c.id),
-  "8": ALL_CIRCLES.filter((c) => c.ring === 7).map((c) => c.id),
-  "9": ALL_CIRCLES.filter((c) => c.ring === 8).map((c) => c.id),
-
-  // === TOP ROW: Cumulative and special selections ===
-  q: [1], // Center only
-  w: ALL_CIRCLES.filter((c) => c.ring <= 1).map((c) => c.id), // Center + ring 1
-  e: ALL_CIRCLES.filter((c) => c.ring <= 2).map((c) => c.id), // Inner 2
-  r: ALL_CIRCLES.filter((c) => c.ring <= 3).map((c) => c.id), // Inner 3
-  t: ALL_CIRCLES.filter((c) => c.ring <= 4).map((c) => c.id), // Inner 4
-  y: ALL_CIRCLES.map((c) => c.id), // All circles
-  u: ALL_CIRCLES.filter((c) => c.ring >= 3).map((c) => c.id), // Outer 3
-  i: ALL_CIRCLES.filter((c) => c.ring >= 4).map((c) => c.id), // Outer 2
-  o: ALL_CIRCLES.filter((c) => c.ring === 5).map((c) => c.id), // Outermost
-  p: ALL_CIRCLES.filter((c) => c.ring === 1 || c.ring === 3 || c.ring === 5).map((c) => c.id), // Odd rings
-
-  // === HOME ROW LEFT: Alternating patterns (evens) ===
-  a: ALL_CIRCLES.filter((c) => c.ring === 0 || c.index % 2 === 0).map((c) => c.id), // All evens + center
-  s: ALL_CIRCLES.filter((c) => c.ring <= 3 && (c.ring === 0 || c.index % 2 === 0)).map((c) => c.id), // Inner evens
-  d: ALL_CIRCLES.filter((c) => c.ring >= 4 && c.index % 2 === 0).map((c) => c.id), // Outer evens
-  f: ALL_CIRCLES.filter((c) => c.index % 3 === 0).map((c) => c.id), // Every 3rd
-
-  // === HOME ROW RIGHT: Alternating patterns (odds) ===
-  g: ALL_CIRCLES.filter((c) => c.ring % 2 === 1).map((c) => c.id), // Odd rings (1, 3, 5, 7)
-  h: ALL_CIRCLES.filter((c) => c.ring % 2 === 0).map((c) => c.id), // Even rings (0, 2, 4, 6)
-  j: ALL_CIRCLES.filter((c) => c.index % 2 === 1).map((c) => c.id), // All odds
-  k: ALL_CIRCLES.filter((c) => c.ring <= 3 && c.index % 2 === 1).map((c) => c.id), // Inner odds
-  l: ALL_CIRCLES.filter((c) => c.ring >= 4 && c.index % 2 === 1).map((c) => c.id), // Outer odds
-
-  // === BOTTOM ROW LEFT: Directional / halves ===
-  z: ALL_CIRCLES.filter((c) => {
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    return c.index <= count / 4 || c.index >= (count * 3) / 4;
-  }).map((c) => c.id), // Top half
-
-  x: ALL_CIRCLES.filter((c) => {
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    return c.index >= count / 4 && c.index <= (count * 3) / 4;
-  }).map((c) => c.id), // Bottom half
-
-  c: ALL_CIRCLES.filter((c) => {
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    return c.index < count / 2;
-  }).map((c) => c.id), // Right half
-
-  v: ALL_CIRCLES.filter((c) => {
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    return c.index >= count / 2;
-  }).map((c) => c.id), // Left half
-
-  // === BOTTOM ROW RIGHT: Radial patterns ===
-  b: ALL_CIRCLES.filter((c) => {
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    // Vertical line (top and bottom)
-    return c.index === 0 || c.index === count / 2;
-  }).map((c) => c.id),
-
-  n: ALL_CIRCLES.filter((c) => {
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    // Horizontal line (left and right)
-    return c.index === count / 4 || c.index === (count * 3) / 4;
-  }).map((c) => c.id),
-
-  m: ALL_CIRCLES.filter((c) => {
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    // 4-point cross (top, right, bottom, left)
-    return c.index === 0 || c.index === count / 4 || c.index === count / 2 || c.index === (count * 3) / 4;
-  }).map((c) => c.id),
-
-  // === NUMBER ROW TOP: Special patterns ===
-  "`": ALL_CIRCLES.filter((c) => {
-    // 6-point star
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    return c.index % (count / 6) === 0;
-  }).map((c) => c.id),
-
-  "-": ALL_CIRCLES.filter((c) => {
-    // 3-point star
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    return c.index % (count / 3) === 0;
-  }).map((c) => c.id),
-
-  "=": ALL_CIRCLES.filter((c) => {
-    // Spiral pattern
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    const offset = (c.ring - 1) * 2;
-    return c.index >= offset && c.index < offset + count / 4;
-  }).map((c) => c.id),
-
-  "[": ALL_CIRCLES.filter((c) => {
-    // Checkerboard
-    return (c.ring + c.index) % 2 === 0;
-  }).map((c) => c.id),
-
-  "]": ALL_CIRCLES.filter((c) => {
-    // Inverse checkerboard
-    return (c.ring + c.index) % 2 === 1;
-  }).map((c) => c.id),
-
-  "\\": ALL_CIRCLES.filter((c) => {
-    // Diagonal stripes
-    if (c.ring === 0) return true;
-    const count = getCountForRing(c.ring);
-    const stripe = Math.floor((c.index / count) * 6);
-    return stripe % 2 === 0;
-  }).map((c) => c.id),
-
-  ";": ALL_CIRCLES.filter((c) => {
-    // Concentric - every other ring filled
-    return c.ring % 2 === 0;
-  }).map((c) => c.id),
-
-  "'": ALL_CIRCLES.filter((c) => {
-    // Opposite concentric
-    return c.ring % 2 === 1;
-  }).map((c) => c.id),
+  // BOTTOM ROW - Short lines on inner/mid rings
+  z: { startRing: 0, endRing: 2, angleRatio: 0.2 },
+  x: { startRing: 0, endRing: 2, angleRatio: 0.5 },
+  c: { startRing: 0, endRing: 2, angleRatio: 0.8 },
+  v: { startRing: 1, endRing: 3, angleRatio: 0.3 },
+  b: { startRing: 1, endRing: 3, angleRatio: 0.7 },
+  n: { startRing: 2, endRing: 4, angleRatio: 0.35 },
+  m: { startRing: 2, endRing: 4, angleRatio: 0.65 },
 };
 
-export default function Home() {
-  const [heldKeys, setHeldKeys] = useState<Set<string>>(new Set());
+// Geometry helper functions
+function polarToCartesian(
+  cx: number,
+  cy: number,
+  radius: number,
+  angleInDegrees: number
+): { x: number; y: number } {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(angleInRadians),
+    y: cy + radius * Math.sin(angleInRadians),
+  };
+}
 
-  // Compute filled circles based on all currently held keys
-  const filledCircles = useMemo(() => {
-    const filled = new Set<number>();
+function calculateActualAngle(angleRatio: number, symmetryOrder: number): number {
+  const sectorSize = 360 / symmetryOrder;
+  return angleRatio * sectorSize;
+}
+
+// Render line with symmetry
+function renderShape(
+  shape: Shape,
+  symmetryOrder: number,
+  shapeIndex: number
+): JSX.Element[] {
+  const angle = calculateActualAngle(shape.angleRatio, symmetryOrder);
+  const startRadius = RING_RADII[shape.startRing];
+  const endRadius = RING_RADII[shape.endRing];
+  const angleStep = 360 / symmetryOrder;
+
+  const elements: JSX.Element[] = [];
+
+  for (let i = 0; i < symmetryOrder; i++) {
+    const rotationAngle = angle + i * angleStep;
+    const startPos = polarToCartesian(CENTER_X, CENTER_Y, startRadius, rotationAngle);
+    const endPos = polarToCartesian(CENTER_X, CENTER_Y, endRadius, rotationAngle);
+
+    elements.push(
+      <line
+        key={`line-${shapeIndex}-${i}`}
+        x1={startPos.x}
+        y1={startPos.y}
+        x2={endPos.x}
+        y2={endPos.y}
+        stroke="var(--circle-stroke)"
+        strokeWidth={2.5}
+        className="shape-element line"
+      />
+    );
+  }
+
+  return elements;
+}
+
+// Render guide lines
+function renderGuideLines(symmetryOrder: number): JSX.Element[] {
+  const angleStep = 360 / symmetryOrder;
+  const elements: JSX.Element[] = [];
+
+  for (let i = 0; i < symmetryOrder; i++) {
+    const angle = i * angleStep;
+    const pos = polarToCartesian(CENTER_X, CENTER_Y, 310, angle);
+
+    elements.push(
+      <line
+        key={`guide-${i}`}
+        x1={CENTER_X}
+        y1={CENTER_Y}
+        x2={pos.x}
+        y2={pos.y}
+        stroke="var(--hint-color)"
+        strokeWidth={1}
+        strokeDasharray="4 4"
+        opacity={0.3}
+        className="guide-line"
+      />
+    );
+  }
+
+  return elements;
+}
+
+// Main component
+export default function ModularSymmetry() {
+  const [symmetryMode, setSymmetryMode] = useState<3 | 4 | 6 | 8 | 12>(6);
+  const [heldKeys, setHeldKeys] = useState<Set<string>>(new Set());
+  const [showGuides, setShowGuides] = useState(false);
+
+  // Compute active shapes based on currently held keys
+  const activeShapes = useMemo(() => {
+    const shapes = new Map<string, Shape>();
 
     heldKeys.forEach((key) => {
-      // All keys go through patterns now (including numbers)
-      const pattern = PATTERNS[key] || PATTERNS[key.toLowerCase()];
-      if (pattern) {
-        pattern.forEach((id) => filled.add(id));
+      const shapeTemplate = KEY_TO_SHAPE[key];
+      if (shapeTemplate) {
+        const posKey = `${shapeTemplate.startRing}_${shapeTemplate.endRing}_${shapeTemplate.angleRatio}`;
+        shapes.set(posKey, shapeTemplate);
       }
     });
 
-    return filled;
+    return shapes;
   }, [heldKeys]);
 
   const addKey = useCallback((key: string) => {
-    setHeldKeys((prev) => new Set(prev).add(key.toLowerCase()));
+    setHeldKeys((prev) => new Set(prev).add(key));
   }, []);
 
   const removeKey = useCallback((key: string) => {
     setHeldKeys((prev) => {
       const next = new Set(prev);
-      next.delete(key.toLowerCase());
+      next.delete(key);
       return next;
     });
   }, []);
@@ -212,14 +168,41 @@ export default function Home() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
-      addKey(e.key);
+
+      const key = e.key.toLowerCase();
+
+      // Symmetry mode selection
+      if (key === "3") {
+        setSymmetryMode(3);
+      } else if (key === "4") {
+        setSymmetryMode(4);
+      } else if (key === "6") {
+        setSymmetryMode(6);
+      } else if (key === "8") {
+        setSymmetryMode(8);
+      } else if (key === "0") {
+        setSymmetryMode(12);
+      }
+      // Guide toggle
+      else if (key === "`") {
+        setShowGuides((prev) => !prev);
+      }
+      // Shape placement - add key to held set
+      else if (KEY_TO_SHAPE[key]) {
+        addKey(key);
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      removeKey(e.key);
+      const key = e.key.toLowerCase();
+
+      // Remove key from held set (but not for symmetry/control keys)
+      if (KEY_TO_SHAPE[key]) {
+        removeKey(key);
+      }
     };
 
-    // Clear all keys if window loses focus
+    // Clear all held keys if window loses focus
     const handleBlur = () => {
       setHeldKeys(new Set());
     };
@@ -227,6 +210,7 @@ export default function Home() {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     window.addEventListener("blur", handleBlur);
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
@@ -234,68 +218,78 @@ export default function Home() {
     };
   }, [addKey, removeKey]);
 
-  const containerSize = 700;
-  const centerOffset = containerSize / 2;
-  const outerRadius = CIRCLE_RADIUS * 2.3 * NUM_RINGS + CIRCLE_RADIUS + 6;
-
   return (
     <div className="instrument-container">
       <svg
-        width={containerSize}
-        height={containerSize}
-        viewBox={`0 0 ${containerSize} ${containerSize}`}
+        width={CONTAINER_SIZE}
+        height={CONTAINER_SIZE}
+        viewBox={`0 0 ${CONTAINER_SIZE} ${CONTAINER_SIZE}`}
         className="instrument-svg"
       >
+        {/* Guide lines */}
+        {showGuides && renderGuideLines(symmetryMode)}
+
         {/* Outer containing circle */}
         <circle
-          cx={centerOffset}
-          cy={centerOffset}
-          r={outerRadius}
+          cx={CENTER_X}
+          cy={CENTER_Y}
+          r={310}
           fill="none"
           stroke="var(--circle-stroke)"
           strokeWidth="2.5"
           className="outer-ring"
         />
 
-        {/* All interactive circles */}
-        {ALL_CIRCLES.map((circle) => (
+        {/* Ring guides (optional visual reference) */}
+        {RING_RADII.slice(1).map((radius, idx) => (
           <circle
-            key={circle.id}
-            cx={centerOffset + circle.cx}
-            cy={centerOffset + circle.cy}
-            r={CIRCLE_RADIUS}
-            fill={filledCircles.has(circle.id) ? "var(--circle-fill)" : "none"}
-            stroke="var(--circle-stroke)"
-            strokeWidth="2"
-            className={`inner-circle ${filledCircles.has(circle.id) ? "filled" : ""}`}
+            key={`ring-${idx}`}
+            cx={CENTER_X}
+            cy={CENTER_Y}
+            r={radius}
+            fill="none"
+            stroke="var(--hint-color)"
+            strokeWidth="1"
+            opacity={0.15}
+            className="ring-guide"
           />
         ))}
+
+        {/* All placed shapes */}
+        {Array.from(activeShapes.values()).map((shape, idx) =>
+          renderShape(shape, symmetryMode, idx)
+        )}
       </svg>
+
+      <div className="info-bar">
+        <span className="symmetry-indicator">
+          Symmetry: {symmetryMode}-fold
+        </span>
+        <span className="shape-count">
+          Shapes: {activeShapes.size}
+        </span>
+      </div>
 
       <div className="hint-container">
         <div className="hint-row">
-          <span className="hint-label">Rings:</span>
-          <span>1 center · 2-9 rings (inner to outer)</span>
+          <span className="hint-label">Symmetry:</span>
+          <span>3 4 6 8 0(12-fold)</span>
         </div>
         <div className="hint-row">
-          <span className="hint-label">Cumulative:</span>
-          <span>W/E/R/T inner · U/I outer · Y all · P stripes</span>
+          <span className="hint-label">Long lines:</span>
+          <span>Q W E R T · Y U I · O P</span>
         </div>
         <div className="hint-row">
-          <span className="hint-label">Alternating:</span>
-          <span>A evens · J odds · G/H odd/even rings</span>
+          <span className="hint-label">Medium lines:</span>
+          <span>A S D · F G H · J K L</span>
         </div>
         <div className="hint-row">
-          <span className="hint-label">Halves:</span>
-          <span>Z top · X bottom · C right · V left</span>
+          <span className="hint-label">Short lines:</span>
+          <span>Z X C · V B · N M</span>
         </div>
         <div className="hint-row">
-          <span className="hint-label">Radial:</span>
-          <span>B vertical · N horizontal · M cross</span>
-        </div>
-        <div className="hint-row">
-          <span className="hint-label">Patterns:</span>
-          <span>` 6-star · - 3-star · = spiral · [ ] checker</span>
+          <span className="hint-label">Controls:</span>
+          <span>` toggle guides · Hold keys to create patterns</span>
         </div>
       </div>
 
@@ -308,6 +302,7 @@ export default function Home() {
           justify-content: center;
           background: var(--bg-color);
           gap: 1.5rem;
+          padding: 2rem;
         }
 
         .instrument-svg {
@@ -318,12 +313,31 @@ export default function Home() {
           opacity: 0.4;
         }
 
-        .inner-circle {
-          transition: fill 0.06s ease-out, filter 0.06s ease-out;
+        .ring-guide {
+          pointer-events: none;
         }
 
-        .inner-circle.filled {
-          filter: drop-shadow(0 0 8px var(--circle-fill));
+        .shape-element {
+          transition: opacity 0.06s ease-out;
+          filter: drop-shadow(0 0 4px var(--circle-stroke));
+        }
+
+        .guide-line {
+          transition: opacity 0.15s ease-out;
+        }
+
+        .info-bar {
+          display: flex;
+          gap: 2rem;
+          font-family: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+          font-size: 13px;
+          color: var(--circle-stroke);
+          opacity: 0.6;
+        }
+
+        .symmetry-indicator,
+        .shape-count {
+          font-variant-numeric: tabular-nums;
         }
 
         .hint-container {
